@@ -169,7 +169,22 @@ async function runProbe(
 		try {
 			await verify({
 				prompt,
-				settle: () => waitFor((event) => event.type === "agent_settled"),
+				settle: async () => {
+					const afterResponse = events.length;
+					const settled = await waitFor((event) => event.type === "agent_settled");
+					// RPC acknowledges receipt; only the assistant turn proves the model completed successfully.
+					expect(events.slice(afterResponse, -1), "Accepted prompt must finish with a model reply").toContainEqual(
+						expect.objectContaining({
+							type: "turn_end",
+							message: expect.objectContaining({
+								role: "assistant",
+								stopReason: "stop",
+								content: [{ type: "text", text: "Probe reply" }],
+							}),
+						}),
+					);
+					return settled;
+				},
 				waitFor,
 				events,
 				requests: provider.requests,
@@ -201,7 +216,7 @@ async function runProbe(
 	}
 }
 
-it("completes native 22K threshold compaction before settling and accepts prompt 3", async () => {
+it("completes native 22K threshold compaction before settling and completes prompt 3", async () => {
 	await runProbe("native", async ({ prompt, settle, events, requests }) => {
 		expect(await prompt("1")).toMatchObject({ success: true });
 		const first = await settle();
