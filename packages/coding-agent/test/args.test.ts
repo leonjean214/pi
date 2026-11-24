@@ -17,6 +17,16 @@ describe("parseArgs", () => {
 			});
 		});
 
+		test.each(["local/Local Chat", "local gateway/model", "local/ Chat "])(
+			"preserves the exact model key %j",
+			(model) => {
+				const overrides = { [model]: { reserveTokens: 123, keepRecentTokens: 45 } };
+				const parsed = parseArgs(["--compaction-overrides", JSON.stringify(overrides)]);
+				expect(parsed.diagnostics).toEqual([]);
+				expect(parsed.compactionOverrides).toEqual(overrides);
+			},
+		);
+
 		test.each([
 			"{",
 			"[]",

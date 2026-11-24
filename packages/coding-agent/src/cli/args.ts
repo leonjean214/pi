@@ -74,7 +74,8 @@ export function normalizeSessionName(value: string): string | undefined {
 }
 
 const cliCompactionOverridesSchema = Type.Record(
-	Type.String({ pattern: "^[^/\\s]+/\\S+$" }),
+	// Match settings lookup: provider and model IDs are literal, including whitespace.
+	Type.String({ pattern: "^[\\s\\S]+/[\\s\\S]+$" }),
 	Type.Object(CompactionModelOverrideSchema.properties, { additionalProperties: false }),
 	{ additionalProperties: false },
 );
