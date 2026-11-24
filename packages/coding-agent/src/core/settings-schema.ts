@@ -10,7 +10,7 @@ function timeoutSetting(options?: TSchemaOptions) {
 	return Type.Union([Type.Number({ minimum: 0 }), Type.Literal("disabled")], options);
 }
 
-const CompactionModelOverrideSchema = Type.Object({
+export const CompactionModelOverrideSchema = Type.Object({
 	reserveTokens: Type.Optional(nonNegativeSafeInteger()),
 	keepRecentTokens: Type.Optional(nonNegativeSafeInteger()),
 });

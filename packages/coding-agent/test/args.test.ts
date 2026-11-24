@@ -2,6 +2,72 @@ import { describe, expect, test } from "vitest";
 import { normalizeSessionName, parseArgs } from "../src/cli/args.ts";
 
 describe("parseArgs", () => {
+	describe("--compaction-overrides flag", () => {
+		test("merges repeated flags per model and per field", () => {
+			const parsed = parseArgs([
+				"--compaction-overrides",
+				'{"fake/family/model":{"reserveTokens":100,"keepRecentTokens":40},"fake/other":{"reserveTokens":0}}',
+				"--compaction-overrides",
+				'{"fake/family/model":{"reserveTokens":150}}',
+			]);
+			expect(parsed.diagnostics).toEqual([]);
+			expect(parsed.compactionOverrides).toEqual({
+				"fake/family/model": { reserveTokens: 150, keepRecentTokens: 40 },
+				"fake/other": { reserveTokens: 0 },
+			});
+		});
+
+		test.each([
+			"local/Local Chat",
+			"local gateway/model",
+			"local/ Chat ",
+			"/local-model",
+			"model",
+			"local/Line\nBreak",
+		])("preserves the exact model key %j", (model) => {
+			const overrides = { [model]: { reserveTokens: 123, keepRecentTokens: 45 } };
+			const parsed = parseArgs(["--compaction-overrides", JSON.stringify(overrides)]);
+			expect(parsed.diagnostics).toEqual([]);
+			expect(parsed.compactionOverrides).toEqual(overrides);
+		});
+
+		test("accepts extra settings fields without treating them as budgets", () => {
+			const parsed = parseArgs([
+				"--compaction-overrides",
+				'{"local/Local Chat":{"reserveTokens":123,"keepRecentTokens":45,"note":"custom","enabled":false}}',
+			]);
+			expect(parsed.diagnostics).toEqual([]);
+			expect(parsed.compactionOverrides).toEqual({
+				"local/Local Chat": { reserveTokens: 123, keepRecentTokens: 45 },
+			});
+		});
+
+		test.each([
+			"{",
+			"[]",
+			"null",
+			'{"fake/model":{"reserveTokens":-1}}',
+			'{"fake/model":{"keepRecentTokens":1.5}}',
+			'{"fake/model":{"reserveTokens":9007199254740992}}',
+			'{"fake/model":null}',
+			'{"fake/model":{"reserveTokens":null}}',
+			JSON.stringify({ "local/Line\nBreak": { reserveTokens: -1 } }),
+		])("reports an error for %s", (input) => {
+			const parsed = parseArgs(["--compaction-overrides", input]);
+			expect(parsed.diagnostics).toEqual([
+				{ type: "error", message: expect.stringContaining("--compaction-overrides") },
+			]);
+			expect(parsed.compactionOverrides).toBeUndefined();
+		});
+
+		test("reports a missing value without consuming the next flag", () => {
+			const parsed = parseArgs(["--compaction-overrides", "--offline"]);
+			expect(parsed.offline).toBe(true);
+			expect(parsed.diagnostics).toEqual([
+				{ type: "error", message: "--compaction-overrides requires a JSON object" },
+			]);
+		});
+	});
 	describe("--version flag", () => {
 		test("parses --version flag", () => {
 			const result = parseArgs(["--version"]);

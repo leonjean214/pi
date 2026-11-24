@@ -4,9 +4,12 @@
 
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import chalk from "chalk";
+import { Type } from "typebox";
+import { Check } from "typebox/value";
 import { APP_NAME, CONFIG_DIR_NAME, ENV_AGENT_DIR, ENV_SESSION_DIR } from "../config.ts";
 import type { ExtensionFlag } from "../core/extensions/types.ts";
-import { getToolListError, type TuiMode } from "../core/settings-manager.ts";
+import { type CompactionModelOverride, getToolListError, type TuiMode } from "../core/settings-manager.ts";
+import { CompactionModelOverrideSchema } from "../core/settings-schema.ts";
 
 export type Mode = "text" | "json" | "rpc";
 
@@ -51,6 +54,7 @@ export interface Args {
 	tuiMode?: TuiMode;
 	verbose?: boolean;
 	projectTrustOverride?: boolean;
+	compactionOverrides?: Record<string, CompactionModelOverride>;
 	messages: string[];
 	fileArgs: string[];
 	/** Unknown flags (potentially extension flags) - map of flag name to value */
@@ -59,6 +63,11 @@ export interface Args {
 }
 
 const VALID_THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+// Validate the budgets for every exact CLI key, including keys with line terminators.
+const CompactionModelOverridesSchema = Type.Record(
+	Type.String({ pattern: "^[\\s\\S]*$" }),
+	CompactionModelOverrideSchema,
+);
 
 export function isValidThinkingLevel(level: string): level is ThinkingLevel {
 	return VALID_THINKING_LEVELS.includes(level as ThinkingLevel);
@@ -76,6 +85,7 @@ export function parseArgs(args: string[]): Args {
 		unknownFlags: new Map(),
 		diagnostics: [],
 	};
+	let compactionOverrides: Map<string, CompactionModelOverride> | undefined;
 
 	for (let i = 0; i < args.length; i++) {
 		const arg = args[i];
@@ -238,6 +248,35 @@ export function parseArgs(args: string[]): Args {
 			}
 		} else if (arg === "--verbose") {
 			result.verbose = true;
+		} else if (arg === "--compaction-overrides") {
+			const json = args[i + 1];
+			if (json === undefined || json.startsWith("--")) {
+				result.diagnostics.push({ type: "error", message: "--compaction-overrides requires a JSON object" });
+				continue;
+			}
+			i++;
+			let overrides: unknown;
+			try {
+				overrides = JSON.parse(json);
+			} catch {
+				result.diagnostics.push({ type: "error", message: "--compaction-overrides requires valid JSON" });
+				continue;
+			}
+			if (!Check(CompactionModelOverridesSchema, overrides)) {
+				result.diagnostics.push({
+					type: "error",
+					message: "--compaction-overrides expects model entries with non-negative safe integer token budgets",
+				});
+				continue;
+			}
+			compactionOverrides ??= new Map();
+			for (const [model, { reserveTokens, keepRecentTokens }] of Object.entries(overrides)) {
+				compactionOverrides.set(model, {
+					...compactionOverrides.get(model),
+					...(reserveTokens === undefined ? {} : { reserveTokens }),
+					...(keepRecentTokens === undefined ? {} : { keepRecentTokens }),
+				});
+			}
 		} else if (arg === "--approve" || arg === "-a") {
 			result.projectTrustOverride = true;
 		} else if (arg === "--no-approve" || arg === "-na") {
@@ -267,6 +306,9 @@ export function parseArgs(args: string[]): Args {
 		}
 	}
 
+	if (compactionOverrides !== undefined) {
+		result.compactionOverrides = Object.fromEntries(compactionOverrides);
+	}
 	return result;
 }
 
@@ -338,6 +380,7 @@ ${chalk.bold("Options:")}
   --list-models [search]         List available models (with optional fuzzy search)
   --verbose                      Force verbose startup (overrides quietStartup setting)
   --tui-mode <mode>              TUI mode: fullscreen (default) or regular
+  --compaction-overrides <json>  Set per-model compaction budgets for this run without writing settings
   --approve, -a                  Trust project-local files for this run
   --no-approve, -na              Ignore project-local files for this run
   --offline                      Disable startup network operations (same as PI_OFFLINE=1)

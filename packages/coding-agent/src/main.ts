@@ -810,7 +810,10 @@ export async function main(args: string[], options?: MainOptions) {
 		const projectTrusted = shouldResolveProjectTrust
 			? false
 			: (cachedProjectTrust ?? parsed.projectTrustOverride ?? trustStore.get(cwd) ?? !hasTrustRequiringResources);
-		const runtimeSettingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted });
+		const runtimeSettingsManager = SettingsManager.create(cwd, agentDir, {
+			projectTrusted,
+			compactionModelOverrides: parsed.compactionOverrides,
+		});
 		const services = await createAgentSessionServices({
 			cwd,
 			agentDir,

@@ -21,8 +21,7 @@ import { AuthStorage } from "../../src/core/auth-storage.ts";
 import type { ExtensionRunner, ExtensionUIContext } from "../../src/core/extensions/index.ts";
 import { convertToLlm } from "../../src/core/messages.ts";
 import { SessionManager } from "../../src/core/session-manager.ts";
-import type { Settings } from "../../src/core/settings-manager.ts";
-import { SettingsManager } from "../../src/core/settings-manager.ts";
+import { type Settings, SettingsManager, type SettingsManagerCreateOptions } from "../../src/core/settings-manager.ts";
 import type { InlineExtension, ResourceLoader } from "../../src/index.ts";
 import { theme } from "../../src/modes/interactive/theme/theme.ts";
 import {
@@ -112,6 +111,7 @@ export interface HarnessOptions {
 	provider?: string;
 	models?: FauxModelDefinition[];
 	settings?: Partial<Settings>;
+	compactionModelOverrides?: SettingsManagerCreateOptions["compactionModelOverrides"];
 	tools?: AgentTool[];
 	initialActiveToolNames?: string[];
 	allowedToolNames?: string[];
@@ -161,7 +161,9 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
 	const extensionRunnerRef: { current?: ExtensionRunner } = {};
 
 	const sessionManager = options.sessionManager ?? SessionManager.inMemory();
-	const settingsManager = SettingsManager.inMemory(options.settings);
+	const settingsManager = SettingsManager.inMemory(options.settings, {
+		compactionModelOverrides: options.compactionModelOverrides,
+	});
 
 	const authStorage = AuthStorage.inMemory();
 	if (withConfiguredAuth) {
