@@ -4,12 +4,11 @@
 
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import chalk from "chalk";
-import { Type } from "typebox";
 import { Check } from "typebox/value";
 import { APP_NAME, CONFIG_DIR_NAME, ENV_AGENT_DIR, ENV_SESSION_DIR } from "../config.ts";
 import type { ExtensionFlag } from "../core/extensions/types.ts";
 import { type CompactionModelOverride, getToolListError, type TuiMode } from "../core/settings-manager.ts";
-import { CompactionModelOverrideSchema } from "../core/settings-schema.ts";
+import { CompactionModelOverridesSchema } from "../core/settings-schema.ts";
 
 export type Mode = "text" | "json" | "rpc";
 
@@ -73,13 +72,6 @@ export function normalizeSessionName(value: string): string | undefined {
 	return name.length > 0 ? name : undefined;
 }
 
-const cliCompactionOverridesSchema = Type.Record(
-	// Match settings lookup: provider and model IDs are literal, including whitespace.
-	Type.String({ pattern: "^[\\s\\S]+/[\\s\\S]+$" }),
-	Type.Object(CompactionModelOverrideSchema.properties, { additionalProperties: false }),
-	{ additionalProperties: false },
-);
-
 export function parseArgs(args: string[]): Args {
 	const result: Args = {
 		messages: [],
@@ -87,6 +79,7 @@ export function parseArgs(args: string[]): Args {
 		unknownFlags: new Map(),
 		diagnostics: [],
 	};
+	let compactionOverrides: Map<string, CompactionModelOverride> | undefined;
 
 	for (let i = 0; i < args.length; i++) {
 		const arg = args[i];
@@ -263,17 +256,20 @@ export function parseArgs(args: string[]): Args {
 				result.diagnostics.push({ type: "error", message: "--compaction-overrides requires valid JSON" });
 				continue;
 			}
-			if (!Check(cliCompactionOverridesSchema, overrides)) {
+			if (!Check(CompactionModelOverridesSchema, overrides)) {
 				result.diagnostics.push({
 					type: "error",
-					message:
-						"--compaction-overrides expects provider/modelId keys with non-negative safe integer token budgets",
+					message: "--compaction-overrides expects model entries with non-negative safe integer token budgets",
 				});
 				continue;
 			}
-			result.compactionOverrides ??= {};
-			for (const [model, budgets] of Object.entries(overrides)) {
-				result.compactionOverrides[model] = { ...result.compactionOverrides[model], ...budgets };
+			compactionOverrides ??= new Map();
+			for (const [model, { reserveTokens, keepRecentTokens }] of Object.entries(overrides)) {
+				compactionOverrides.set(model, {
+					...compactionOverrides.get(model),
+					...(reserveTokens === undefined ? {} : { reserveTokens }),
+					...(keepRecentTokens === undefined ? {} : { keepRecentTokens }),
+				});
 			}
 		} else if (arg === "--approve" || arg === "-a") {
 			result.projectTrustOverride = true;
@@ -304,6 +300,9 @@ export function parseArgs(args: string[]): Args {
 		}
 	}
 
+	if (compactionOverrides !== undefined) {
+		result.compactionOverrides = Object.fromEntries(compactionOverrides);
+	}
 	return result;
 }
 

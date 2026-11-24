@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { parseArgs } from "../src/cli/args.ts";
 import { CONFIG_DIR_NAME } from "../src/config.ts";
 import { InMemorySettingsStorage, SettingsManager } from "../src/core/settings-manager.ts";
 
@@ -11,6 +12,20 @@ const defaults = { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 
 
 // Regression coverage for #8133.
 describe("compaction model overrides", () => {
+	it("applies a CLI override for an empty provider ID without applying extra fields", () => {
+		const parsed = parseArgs([
+			"--compaction-overrides",
+			'{"/local-model":{"reserveTokens":123,"keepRecentTokens":45,"enabled":false}}',
+		]);
+		expect(parsed.diagnostics).toEqual([]);
+		const manager = SettingsManager.inMemory({}, { compactionModelOverrides: parsed.compactionOverrides });
+		expect(manager.getCompactionSettings({ provider: "", id: "local-model" })).toEqual({
+			enabled: true,
+			reserveTokens: 123,
+			keepRecentTokens: 45,
+		});
+	});
+
 	it("uses defaults without compaction settings", () => {
 		const manager = SettingsManager.inMemory();
 		expect(manager.getCompactionSettings()).toEqual(defaults);

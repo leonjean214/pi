@@ -17,15 +17,30 @@ describe("parseArgs", () => {
 			});
 		});
 
-		test.each(["local/Local Chat", "local gateway/model", "local/ Chat "])(
-			"preserves the exact model key %j",
-			(model) => {
-				const overrides = { [model]: { reserveTokens: 123, keepRecentTokens: 45 } };
-				const parsed = parseArgs(["--compaction-overrides", JSON.stringify(overrides)]);
-				expect(parsed.diagnostics).toEqual([]);
-				expect(parsed.compactionOverrides).toEqual(overrides);
-			},
-		);
+		test.each([
+			"local/Local Chat",
+			"local gateway/model",
+			"local/ Chat ",
+			"/local-model",
+			"model",
+			"local/Line\nBreak",
+		])("preserves the exact model key %j", (model) => {
+			const overrides = { [model]: { reserveTokens: 123, keepRecentTokens: 45 } };
+			const parsed = parseArgs(["--compaction-overrides", JSON.stringify(overrides)]);
+			expect(parsed.diagnostics).toEqual([]);
+			expect(parsed.compactionOverrides).toEqual(overrides);
+		});
+
+		test("accepts extra settings fields without treating them as budgets", () => {
+			const parsed = parseArgs([
+				"--compaction-overrides",
+				'{"local/Local Chat":{"reserveTokens":123,"keepRecentTokens":45,"note":"custom","enabled":false}}',
+			]);
+			expect(parsed.diagnostics).toEqual([]);
+			expect(parsed.compactionOverrides).toEqual({
+				"local/Local Chat": { reserveTokens: 123, keepRecentTokens: 45 },
+			});
+		});
 
 		test.each([
 			"{",
@@ -34,8 +49,9 @@ describe("parseArgs", () => {
 			'{"fake/model":{"reserveTokens":-1}}',
 			'{"fake/model":{"keepRecentTokens":1.5}}',
 			'{"fake/model":{"reserveTokens":9007199254740992}}',
-			'{"fake/model":{"enabled":false}}',
-			'{"model":{"reserveTokens":1}}',
+			'{"fake/model":null}',
+			'{"fake/model":{"reserveTokens":null}}',
+			JSON.stringify({ "local/Line\nBreak": { reserveTokens: -1 } }),
 		])("reports an error for %s", (input) => {
 			const parsed = parseArgs(["--compaction-overrides", input]);
 			expect(parsed.diagnostics).toEqual([
