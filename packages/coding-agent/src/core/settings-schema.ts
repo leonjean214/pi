@@ -10,23 +10,20 @@ function timeoutSetting(options?: TSchemaOptions) {
 	return Type.Union([Type.Number({ minimum: 0 }), Type.Literal("disabled")], options);
 }
 
-const CompactionModelOverrideSchema = Type.Object({
+export const CompactionModelOverrideSchema = Type.Object({
 	reserveTokens: Type.Optional(nonNegativeSafeInteger()),
 	keepRecentTokens: Type.Optional(nonNegativeSafeInteger()),
 });
-
-// TypeBox's default string record pattern skips keys containing line terminators.
-export const CompactionModelOverridesSchema = Type.Record(
-	Type.String({ pattern: "^[\\s\\S]*$" }),
-	CompactionModelOverrideSchema,
-	{ description: 'Per-model overrides keyed by exact "provider/modelId" strings.' },
-);
 
 const CompactionSettingsSchema = Type.Object({
 	enabled: Type.Optional(Type.Boolean({ default: SETTINGS_DEFAULTS.compaction.enabled })),
 	reserveTokens: Type.Optional(nonNegativeSafeInteger({ default: SETTINGS_DEFAULTS.compaction.reserveTokens })),
 	keepRecentTokens: Type.Optional(nonNegativeSafeInteger({ default: SETTINGS_DEFAULTS.compaction.keepRecentTokens })),
-	modelOverrides: Type.Optional(CompactionModelOverridesSchema),
+	modelOverrides: Type.Optional(
+		Type.Record(Type.String(), CompactionModelOverrideSchema, {
+			description: 'Per-model overrides keyed by exact "provider/modelId" strings.',
+		}),
+	),
 });
 
 const BranchSummarySettingsSchema = Type.Object({

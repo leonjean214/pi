@@ -4,11 +4,12 @@
 
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import chalk from "chalk";
+import { Type } from "typebox";
 import { Check } from "typebox/value";
 import { APP_NAME, CONFIG_DIR_NAME, ENV_AGENT_DIR, ENV_SESSION_DIR } from "../config.ts";
 import type { ExtensionFlag } from "../core/extensions/types.ts";
 import { type CompactionModelOverride, getToolListError, type TuiMode } from "../core/settings-manager.ts";
-import { CompactionModelOverridesSchema } from "../core/settings-schema.ts";
+import { CompactionModelOverrideSchema } from "../core/settings-schema.ts";
 
 export type Mode = "text" | "json" | "rpc";
 
@@ -62,6 +63,11 @@ export interface Args {
 }
 
 const VALID_THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+// Validate the budgets for every exact CLI key, including keys with line terminators.
+const CompactionModelOverridesSchema = Type.Record(
+	Type.String({ pattern: "^[\\s\\S]*$" }),
+	CompactionModelOverrideSchema,
+);
 
 export function isValidThinkingLevel(level: string): level is ThinkingLevel {
 	return VALID_THINKING_LEVELS.includes(level as ThinkingLevel);
