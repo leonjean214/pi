@@ -161,6 +161,8 @@ export type SettingsScope = "global" | "project";
 
 export interface SettingsManagerCreateOptions {
 	projectTrusted?: boolean;
+	/** Process-local budgets. Never included in persisted settings. */
+	compactionModelOverrides?: Record<string, CompactionModelOverride>;
 }
 
 export interface SettingsStorage {
@@ -274,6 +276,7 @@ export class SettingsManager {
 	private globalSettings: Settings;
 	private projectSettings: Settings;
 	private settings: Settings;
+	private readonly compactionModelOverrides: SettingsManagerCreateOptions["compactionModelOverrides"];
 	private projectTrusted: boolean;
 	private modifiedFields = new Set<keyof Settings>(); // Track global fields modified during session
 	private modifiedNestedFields = new Map<keyof Settings, Set<string>>(); // Track global nested field modifications
@@ -294,7 +297,9 @@ export class SettingsManager {
 		initialErrors: SettingsError[] = [],
 		projectTrusted = true,
 		settingsPaths: SettingsPaths = {},
+		compactionModelOverrides?: SettingsManagerCreateOptions["compactionModelOverrides"],
 	) {
+		this.compactionModelOverrides = compactionModelOverrides;
 		this.storage = storage;
 		this.globalSettings = initialGlobal;
 		this.projectSettings = initialProject;
@@ -303,7 +308,14 @@ export class SettingsManager {
 		this.projectSettingsLoadError = projectLoadError;
 		this.errors = [...initialErrors];
 		this.settingsPaths = settingsPaths;
-		this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
+		this.settings = this.mergeEffectiveSettings();
+	}
+
+	private mergeEffectiveSettings(): Settings {
+		const merged = deepMergeSettings(this.globalSettings, this.projectSettings);
+		return this.compactionModelOverrides === undefined
+			? merged
+			: deepMergeSettings(merged, { compaction: { modelOverrides: this.compactionModelOverrides } });
 	}
 
 	/** Create a SettingsManager that loads from files */
@@ -352,6 +364,7 @@ export class SettingsManager {
 			initialErrors,
 			projectTrusted,
 			settingsPaths,
+			options.compactionModelOverrides,
 		);
 	}
 
@@ -484,7 +497,7 @@ export class SettingsManager {
 		if (!trusted) {
 			this.projectSettings = {};
 			this.projectSettingsLoadError = null;
-			this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
+			this.settings = this.mergeEffectiveSettings();
 			return;
 		}
 
@@ -494,7 +507,7 @@ export class SettingsManager {
 		if (projectLoad.error) {
 			this.recordError("project", projectLoad.error);
 		}
-		this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
+		this.settings = this.mergeEffectiveSettings();
 	}
 
 	async reload(): Promise<void> {
@@ -522,7 +535,7 @@ export class SettingsManager {
 			this.recordError("project", projectLoad.error);
 		}
 
-		this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
+		this.settings = this.mergeEffectiveSettings();
 	}
 
 	/** Apply additional overrides on top of current settings */
@@ -627,7 +640,7 @@ export class SettingsManager {
 	}
 
 	private save(): void {
-		this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
+		this.settings = this.mergeEffectiveSettings();
 
 		if (this.globalSettingsLoadError) {
 			return;
@@ -645,7 +658,7 @@ export class SettingsManager {
 	private saveProjectSettings(settings: Settings): void {
 		this.assertProjectTrustedForWrite();
 		this.projectSettings = structuredClone(settings);
-		this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
+		this.settings = this.mergeEffectiveSettings();
 
 		if (this.projectSettingsLoadError) {
 			return;

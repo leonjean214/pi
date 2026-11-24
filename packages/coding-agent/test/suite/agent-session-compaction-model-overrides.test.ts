@@ -102,6 +102,41 @@ describe("AgentSession compaction model overrides", () => {
 		},
 	);
 
+	it("uses process-local budgets for post-run threshold compaction", async () => {
+		const preparations: SessionBeforeCompactEvent[] = [];
+		const harness = await createHarness({
+			models: [{ id: "faux-1", contextWindow: 4000 }],
+			tools: [],
+			settings: { compaction: { reserveTokens: 10, keepRecentTokens: 20000 } },
+			compactionModelOverrides: { "faux/faux-1": { reserveTokens: 2000, keepRecentTokens: 150 } },
+			extensionFactories: [
+				(pi) => {
+					pi.on("session_before_compact", (event) => {
+						preparations.push(event);
+						return {
+							compaction: {
+								summary: "compacted history",
+								firstKeptEntryId: event.preparation.firstKeptEntryId,
+								tokensBefore: event.preparation.tokensBefore,
+							},
+						};
+					});
+				},
+			],
+		});
+		harnesses.push(harness);
+		seedHistory(harness);
+		harness.setResponses([fauxAssistantMessage("z".repeat(8000))]);
+		await harness.session.prompt("continue");
+
+		expect(preparations).toHaveLength(1);
+		expect(preparations[0]).toMatchObject({
+			reason: "threshold",
+			preparation: { settings: { enabled: true, reserveTokens: 2000, keepRecentTokens: 150 } },
+		});
+		expect(harness.eventsOfType("compaction_end")).toHaveLength(1);
+	});
+
 	it("uses the newly selected model without changing ordinary settings", async () => {
 		const harness = await createHarness({
 			models: [

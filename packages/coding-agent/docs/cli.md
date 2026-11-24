@@ -236,6 +236,8 @@ See [Configuration](configuration.md) for saved configuration, [Security](securi
   Uses `fullscreen` (default) or `regular` terminal mode.
 - `--verbose`<br>
   Shows verbose interactive startup information, overriding `quietStartup`.
+- `--compaction-overrides <json>`<br>
+  Sets per-model compaction budgets for this process without writing settings. Pass a JSON object keyed by exact `provider/modelId`, for example `--compaction-overrides '{"openai/gpt-5":{"reserveTokens":32000,"keepRecentTokens":8000}}'`. Repeating the option merges budgets per model, with the last value winning for each field.
 - `-a`, `--approve`<br>
   Trusts project-local configuration and resources for this process.
 - `-na`, `--no-approve`<br>

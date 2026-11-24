@@ -79,6 +79,8 @@ CLI tool options override this setting for one invocation. `--tools` with only `
 
 Compaction token values must be non-negative safe integers. Each value resolves independently from the matching model override, then the ordinary compaction setting, then the built-in default. Project and user objects merge before model lookup.
 
+Values supplied with `--compaction-overrides` take precedence over both files for the named model and fields. They apply only to the current process and are not saved.
+
 See [Compaction Reference](compaction.md) for trigger, summarization, and validation behavior.
 
 ### Branch summaries
