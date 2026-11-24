@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { createInterface } from "node:readline";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
@@ -45,12 +45,13 @@ async function startProvider() {
 		response.writeHead(200, { "Content-Type": "text/event-stream" });
 		response.write(chunk({ choices: [{ index: 0, delta: { content: summary ? "Probe summary" : "Probe reply" } }] }));
 		response.write(chunk({ choices: [{ index: 0, delta: {}, finish_reason: "stop" }] }));
-		response.end(
+		response.write(
 			chunk({
 				choices: [],
 				usage: { prompt_tokens: totalTokens - 1, completion_tokens: 1, total_tokens: totalTokens },
-			}) + "data: [DONE]\n\n",
+			}),
 		);
+		response.end("data: [DONE]\n\n");
 	});
 	await new Promise<void>((resolve, reject) => {
 		server.once("error", reject);
@@ -86,8 +87,8 @@ async function runProbe(
 	const projectSettings = join(projectDir, ".pi", "settings.json");
 	const settingsPaths = [agentSettings, projectSettings];
 	const settingsFiles = () =>
-		readdirSync(root, { recursive: true })
-			.filter((path) => path.endsWith("settings.json"))
+		readdirSync(root, { recursive: true, encoding: "utf8" })
+			.filter((path) => basename(path) === "settings.json")
 			.sort();
 	const events: ProbeEvent[] = [];
 	const transcript: string[] = [];
